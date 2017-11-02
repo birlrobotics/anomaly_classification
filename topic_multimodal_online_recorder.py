@@ -29,7 +29,6 @@ class RedisTalker(multiprocessing.Process):
 
             score = data_header.stamp.to_sec()
             value = data_frame
-            print "score:", score
             r.zadd("tag_multimodal_msgs", value, score)
 
 if __name__ == '__main__':
@@ -37,6 +36,7 @@ if __name__ == '__main__':
     process_receiver = data_stream_handler_process.TagMultimodalTopicHandler(
         mmc.interested_data_fields,
         com_queue_of_receiver,
+        node_name="tagMsgReceiverForOnlineRedisRecorder",
     )
     process_receiver.start()
 
