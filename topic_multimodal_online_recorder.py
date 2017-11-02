@@ -3,7 +3,6 @@ import multiprocessing
 import birl.HMM.hmm_for_baxter_using_only_success_trials.hmm_online_service.data_stream_handler_process as data_stream_handler_process
 import birl.HMM.hmm_for_baxter_using_only_success_trials.hmm_online_service.constant as constant 
 import birl.robot_introspection_pkg.multi_modal_config as mmc
-import rospy
 from anomaly_classification_proxy.srv import (
     AnomalyClassificationService, 
     AnomalyClassificationServiceResponse,
@@ -19,12 +18,13 @@ class RedisTalker(multiprocessing.Process):
         
     def run(self):
         import redis
+        import rospy
         r = redis.Redis(host='localhost', port=6379, db=0)
         print 'delete key \"tag_multimodal_msgs\"', r.delete("tag_multimodal_msgs")
         while True:
             try:
                 latest_data_tuple = self.com_queue.get(1)
-            except multiprocessing.Queue.Empty:
+            except Queue.Empty:
                 continue
 
             data_frame = latest_data_tuple[constant.data_frame_idx]
@@ -33,6 +33,7 @@ class RedisTalker(multiprocessing.Process):
 
             score = data_header.stamp.to_sec()
             value = data_frame
+            print score
             r.zadd("tag_multimodal_msgs", value, score)
 
 if __name__ == '__main__':
@@ -48,9 +49,20 @@ if __name__ == '__main__':
     redis_talker = RedisTalker(com_queue_of_redis)
     redis_talker.start()
 
+    import rospy
     rospy.init_node('anomaly_classification_node')
     def tmp_callback(req):
         print req
+        anomaly_t = req.anomaly_start_time_in_secs
+        import redis
+        r = redis.Redis(host='localhost', port=6379, db=0)
+        from birl.robot_introspection_pkg.anomaly_sampling_config import anomaly_window_size_in_sec, anomaly_resample_hz
+        search_start = anomaly_t-anomaly_window_size_in_sec/2-1            
+        search_end = anomaly_t+anomaly_window_size_in_sec/2+1
+
+        rows = r.zrangebyscore("tag_multimodal_msgs", search_start, search_end)
+        print rows
+
         return AnomalyClassificationServiceResponse(1, 0.99)
     s = rospy.Service("AnomalyClassificationService", AnomalyClassificationService, tmp_callback) 
 
@@ -59,8 +71,4 @@ if __name__ == '__main__':
             latest_data_tuple = com_queue_of_receiver.get(1)
         except Queue.Empty:
             continue
-        latest_data_tuple = com_queue_of_receiver.get()
         com_queue_of_redis.put(latest_data_tuple)
-
-    process_receiver.shutdown()
-    redis_talker.shutdown()
