@@ -4,6 +4,10 @@ import birl.HMM.hmm_for_baxter_using_only_success_trials.hmm_online_service.data
 import birl.HMM.hmm_for_baxter_using_only_success_trials.hmm_online_service.constant as constant 
 import birl.robot_introspection_pkg.multi_modal_config as mmc
 import rospy
+from anomaly_classification_proxy.srv import (
+    AnomalyClassificationService, 
+    AnomalyClassificationServiceResponse,
+)
 
 class RedisTalker(multiprocessing.Process):
     def __init__(
@@ -43,6 +47,12 @@ if __name__ == '__main__':
     com_queue_of_redis = Queue()
     redis_talker = RedisTalker(com_queue_of_redis)
     redis_talker.start()
+
+    rospy.init_node('anomaly_classification_node')
+    def tmp_callback(req):
+        print req
+        return AnomalyClassificationServiceResponse(1, 0.99)
+    s = rospy.Service("AnomalyClassificationService", AnomalyClassificationService, tmp_callback) 
 
     while not rospy.is_shutdown():
         try:
