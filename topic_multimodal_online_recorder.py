@@ -1,5 +1,5 @@
-from multiprocessing import Queue
 import multiprocessing
+import Queue
 import birl.HMM.hmm_for_baxter_using_only_success_trials.hmm_online_service.data_stream_handler_process as data_stream_handler_process
 import birl.HMM.hmm_for_baxter_using_only_success_trials.hmm_online_service.constant as constant 
 import birl.robot_introspection_pkg.multi_modal_config as mmc
@@ -28,7 +28,7 @@ class RedisTalker(multiprocessing.Process):
         while True:
             try:
                 latest_data_tuple = self.com_queue.get(1)
-            except Queue.Queue.Empty:
+            except Queue.Empty:
                 continue
 
             data_frame = latest_data_tuple[constant.data_frame_idx]
@@ -40,7 +40,7 @@ class RedisTalker(multiprocessing.Process):
             r.zadd("tag_multimodal_msgs", value, score)
 
 if __name__ == '__main__':
-    com_queue_of_receiver = Queue()
+    com_queue_of_receiver = multiprocessing.Queue()
     process_receiver = data_stream_handler_process.TagMultimodalTopicHandler(
         mmc.interested_data_fields,
         com_queue_of_receiver,
@@ -48,7 +48,7 @@ if __name__ == '__main__':
     )
     process_receiver.start()
 
-    com_queue_of_redis = Queue()
+    com_queue_of_redis = multiprocessing.Queue()
     redis_talker = RedisTalker(com_queue_of_redis)
     redis_talker.start()
 
@@ -103,6 +103,6 @@ if __name__ == '__main__':
     while not rospy.is_shutdown():
         try:
             latest_data_tuple = com_queue_of_receiver.get(1)
-        except Queue.Queue.Empty:
+        except Queue.Empty:
             continue
         com_queue_of_redis.put(latest_data_tuple)
