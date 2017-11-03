@@ -25,7 +25,7 @@ class RedisTalker(multiprocessing.Process):
         import rospy
         r = redis.Redis(host='localhost', port=6379, db=0)
         print 'delete key \"tag_multimodal_msgs\"', r.delete("tag_multimodal_msgs")
-        while True:
+        while not rospy.is_shutdown():
             try:
                 latest_data_tuple = self.com_queue.get(1)
             except Queue.Empty:
@@ -85,7 +85,6 @@ if __name__ == '__main__':
         old_time_index = search_df.index
         resampled_anomaly_df = search_df.reindex(old_time_index.union(new_time_index)).interpolate(method='linear', axis=0).ix[new_time_index]
 
-        ipdb.set_trace()
         for dim in dimensions:
             fig, ax = plt.subplots(nrows=1, ncols=1)
             time_x = resampled_anomaly_df.index-resampled_anomaly_df.index[0]
