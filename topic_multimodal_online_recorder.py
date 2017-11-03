@@ -7,6 +7,10 @@ from anomaly_classification_proxy.srv import (
     AnomalyClassificationService, 
     AnomalyClassificationServiceResponse,
 )
+import ipdb
+import copy
+import numpy as np
+import matplotlib.pyplot as plt
 
 class RedisTalker(multiprocessing.Process):
     def __init__(
@@ -24,7 +28,7 @@ class RedisTalker(multiprocessing.Process):
         while True:
             try:
                 latest_data_tuple = self.com_queue.get(1)
-            except Queue.Empty:
+            except Queue.Queue.Empty:
                 continue
 
             data_frame = latest_data_tuple[constant.data_frame_idx]
@@ -33,7 +37,6 @@ class RedisTalker(multiprocessing.Process):
 
             score = data_header.stamp.to_sec()
             value = data_frame
-            print score
             r.zadd("tag_multimodal_msgs", value, score)
 
 if __name__ == '__main__':
@@ -60,15 +63,46 @@ if __name__ == '__main__':
         search_start = anomaly_t-anomaly_window_size_in_sec/2-1            
         search_end = anomaly_t+anomaly_window_size_in_sec/2+1
 
-        rows = r.zrangebyscore("tag_multimodal_msgs", search_start, search_end)
-        print rows
+        rows = r.zrangebyscore("tag_multimodal_msgs", search_start, search_end, withscores=True)
+        if len(rows) == 0:
+            rospy.logerr("cannot find exec recrod, redis returned nothing")
+            return AnomalyClassificationServiceResponse(-1, -1)
 
+        import pandas as pd
+        import birl.robot_introspection_pkg.multi_modal_config as mmc
+        dimensions = copy.deepcopy(mmc.interested_data_fields)
+        if '.tag' in dimensions:
+            idx_to_del = dimensions.index('.tag')
+            del dimensions[idx_to_del]
+        search_df = pd.DataFrame(columns=dimensions)
+        for item in rows:
+            value, score = item
+            time = score
+            data_frame = eval(value)
+            search_df.loc[score] = data_frame 
+
+        new_time_index = np.linspace(anomaly_t-anomaly_window_size_in_sec/2, anomaly_t+anomaly_window_size_in_sec/2, anomaly_window_size_in_sec*anomaly_resample_hz)
+        old_time_index = search_df.index
+        resampled_anomaly_df = search_df.reindex(old_time_index.union(new_time_index)).interpolate(method='linear', axis=0).ix[new_time_index]
+
+        ipdb.set_trace()
+        for dim in dimensions:
+            fig, ax = plt.subplots(nrows=1, ncols=1)
+            time_x = resampled_anomaly_df.index-resampled_anomaly_df.index[0]
+            ax.plot(
+                time_x.tolist(),
+                resampled_anomaly_df[dim].tolist(), 
+            )
+            ax.set_title(dim)
+        plt.show()
+        plt.close()
         return AnomalyClassificationServiceResponse(1, 0.99)
+
     s = rospy.Service("AnomalyClassificationService", AnomalyClassificationService, tmp_callback) 
 
     while not rospy.is_shutdown():
         try:
             latest_data_tuple = com_queue_of_receiver.get(1)
-        except Queue.Empty:
+        except Queue.Queue.Empty:
             continue
         com_queue_of_redis.put(latest_data_tuple)
